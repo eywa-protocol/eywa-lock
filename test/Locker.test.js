@@ -41,10 +41,14 @@ describe('Locker unit tests', () => {
   });
 
   it("should set lock duration", async function () {
-    for (let duration of durations) {
-      await locker.setLockDuration(token1, duration, true);
-      expect(await locker.lockDuration(token1, duration)).to.be.equal(true);
-    }
+      await locker.setLockDurations(token1, [durations[0], durations[1]], true);
+      expect(await locker.lockDuration(token1, durations[0])).to.be.equal(true);
+      expect(await locker.lockDuration(token1, durations[1])).to.be.equal(true);
+  });
+
+  it("should set lock duration", async function () {
+    await locker.setLockDuration(token1, durations[2], true);
+    expect(await locker.lockDuration(token1, durations[2])).to.be.equal(true);
   });
 
   it("shouldn\'t set lock duration of not an owner", async function () {

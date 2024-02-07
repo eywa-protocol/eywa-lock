@@ -13,23 +13,23 @@ contract Locker is Ownable  {
         uint256 id;
         address lp;
         uint256 amount;
-        uint256 start;
-        uint256 duration;
+        uint64 start;
+        uint64 duration;
     }
     
     /// @dev allowance of using lp for lock
     mapping(address => bool) public isLpAllowed;
     /// @dev allowance of using lock duration for lp
-    mapping(address => mapping(uint256 => bool)) public lockDuration;
+    mapping(address => mapping(uint64 => bool)) public lockDuration;
     /// @dev user's locks
     mapping(address => Lock[]) public locks;
-    /// @dev id of lock
+    /// @dev id of lock by user, user => lock id
     mapping(address => uint256) private _lockId;
 
-    event Locked(address owner, address lp, uint256 amount, uint256 duration);
-    event Unlocked(address owner, address lp, uint256 amount, uint256 duration);
+    event Locked(address owner, address lp, uint256 amount, uint64 duration);
+    event Unlocked(address owner, address lp, uint256 amount, uint64 duration);
     event LpAllowanceSet(address lp, bool isAllowed);
-    event LockDurationSet(address lp, uint256 duration, bool isAllowed);
+    event LockDurationSet(address lp, uint64 duration, bool isAllowed);
     
     /**
      * @dev Lock amount of lp for duration seconds.
@@ -38,13 +38,13 @@ contract Locker is Ownable  {
      * @param amount The amount of input lp token to lock;
      * @param duration The duration of lock in seconds;
      */
-    function lock(address lp, uint256 amount, uint256 duration) external {
+    function lock(address lp, uint256 amount, uint64 duration) external {
         require(isLpAllowed[lp], "Locker: LP not allowed");
         require(lockDuration[lp][duration] == true, "Locker: wrong duration");
-        SafeERC20.safeTransferFrom(IERC20(lp), msg.sender, address(this), amount);
-        Lock memory lock_ = Lock(++_lockId[msg.sender], lp, amount, block.timestamp, duration);
+        Lock memory lock_ = Lock(++_lockId[msg.sender], lp, amount, uint64(block.timestamp), duration);
         locks[msg.sender].push(lock_);
         emit Locked(msg.sender, lp, amount, duration);
+        SafeERC20.safeTransferFrom(IERC20(lp), msg.sender, address(this), amount);
     }
 
     /**
@@ -54,13 +54,13 @@ contract Locker is Ownable  {
      */
     function unlock(uint256 lockId_) external {
         (Lock memory lock_, uint256 index) = _findLock(lockId_);
-        uint256 duration = lock_.duration;
+        uint64 duration = lock_.duration;
         uint256 amount = lock_.amount;
         address lp = lock_.lp;
         require((lock_.start + duration) < block.timestamp, "Locker: still locked");
         _deleteLock(index);
-        SafeERC20.safeTransfer(IERC20(lock_.lp), msg.sender, amount);
         emit Unlocked(msg.sender, lp, amount, duration);
+        SafeERC20.safeTransfer(IERC20(lock_.lp), msg.sender, amount);
     }
 
     /**
@@ -81,9 +81,23 @@ contract Locker is Ownable  {
      * @param duration Time for which it will be possible to lock;
      * @param isAllowed Allowance status for duration;
      */
-    function setLockDuration(address lp, uint256 duration, bool isAllowed) external onlyOwner {
+    function setLockDuration(address lp, uint64 duration, bool isAllowed) external onlyOwner {
         lockDuration[lp][duration] = isAllowed;
         emit LockDurationSet(lp, duration, isAllowed);
+    }
+
+    /**
+     * @dev Sets the array of time for which lp can be blocked.
+     * 
+     * @param lp The addres of lp token;
+     * @param durations Array of time for which it will be possible to lock;
+     * @param isAllowed Allowance status for durations;
+     */
+    function setLockDurations(address lp, uint64[] calldata durations, bool isAllowed) external onlyOwner {
+        for (uint256 i; i < durations.length; i++) {
+            lockDuration[lp][durations[i]] = isAllowed;
+            emit LockDurationSet(lp, durations[i], isAllowed);
+        }
     }
 
     /**
